@@ -1,0 +1,66 @@
+name: CI
+
+# Quand le pipeline se lance : à chaque push ou pull request sur main
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    # Une machine Linux neuve fournie par GitHub, détruite à la fin
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v5
+
+      - name: Créer le fichier .env de test (valeurs factices)
+        run: cp .env.example .env
+
+      - name: Construire les images
+        run: docker compose build
+
+      - name: Démarrer l'application
+        run: docker compose up -d
+
+      - name: Attendre que le serveur réponde
+        run: |
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null http://localhost; then
+              echo "Serveur prêt"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Le serveur n'a pas démarré à temps"
+          exit 1
+
+      - name: Test 1 - la page d'accueil répond
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/)
+          echo "Code HTTP : $code"
+          test "$code" = "200"
+
+      - name: Test 2 - /films est protégé (redirection vers la connexion)
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/films)
+          echo "Code HTTP : $code"
+          test "$code" = "302"
+
+      - name: Test 3 - l'API n'est pas accessible de l'extérieur
+        run: |
+          if curl -s --max-time 3 http://localhost:5000/ ; then
+            echo "ERREUR : l'API est exposée !"
+            exit 1
+          fi
+          echo "OK : l'API n'est pas exposée"
+
+      - name: Afficher les logs en cas d'échec
+        if: failure()
+        run: docker compose logs
+
+      - name: Arrêter l'application
+        if: always()
+        run: docker compose down
