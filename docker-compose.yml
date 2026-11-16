@@ -1,0 +1,32 @@
+services:
+  api:
+    build:
+      context: ./API
+      dockerfile: Dockerfile
+    expose:
+      - "5000"
+    volumes:
+      - ./API:/app
+    networks:
+      - my_network
+
+  serveur:
+    build:
+      context: ./SERVEUR
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    environment:
+      ADMIN_USERNAME: ${ADMIN_USERNAME}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      SECRET_KEY: ${SECRET_KEY}
+    volumes:
+      - ./SERVEUR:/app
+    depends_on:
+      - api
+    networks:
+      - my_network
+
+networks:
+  my_network:
+    driver: bridge
